@@ -39,6 +39,7 @@ jobs:
           commit_message: "ci: update query.json"
           file_pattern: query.json
           branch: ${{ github.ref_name }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       # If you use peter-evans/create-pull-request, provide `token` input:
       # - name: Create Pull Request
