@@ -4,6 +4,7 @@ import json
 import yaml
 import requests
 import zipfile
+import shutil
 
 # Configuration
 GITHUB_REPO_URL = 'https://github.com/wikijm/ConvertSigmaRepo2SentinelOnePQ/archive/refs/heads/main.zip'
@@ -12,9 +13,12 @@ QUERY_JSON_PATH = 'query.json'
 ZIP_FILE_PATH = 'repo.zip'
 ERRORS_LOG_PATH = 'errors.log'
 
-# Function to download and extract the GitHub repository
 def download_and_extract_repo(repo_url, zip_path, extract_path):
     try:
+        # Clean up old extraction if it exists
+        if os.path.exists(extract_path):
+            shutil.rmtree(extract_path)
+            
         response = requests.get(repo_url)
         response.raise_for_status()
 
@@ -24,17 +28,12 @@ def download_and_extract_repo(repo_url, zip_path, extract_path):
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(extract_path)
 
-        # Delete the zip file after extraction
         os.remove(zip_path)
         return True
-    except requests.RequestException as e:
-        log_error(f"Error downloading the repository: {e}")
-        return False
-    except zipfile.BadZipFile as e:
-        log_error(f"Error extracting the zip file: {e}")
+    except Exception as e:
+        log_error(f"Error downloading or extracting the repository: {e}")
         return False
 
-# Function to get .md files
 def get_md_files(local_path):
     md_files = []
     for root, _, files in os.walk(local_path):
@@ -43,68 +42,62 @@ def get_md_files(local_path):
                 md_files.append(os.path.join(root, file))
     return md_files
 
-# Function to extract Powerquery and SIGMA rule
 def extract_info(content):
     lines = content.split('\n')
+    # Powerquery is typically on the 3rd line based on your logic
     powerquery = lines[2].strip() if len(lines) > 2 else ''
     sigma_rule = re.search(r'```yaml(.*?)```', content, re.DOTALL)
     sigma_rule = sigma_rule.group(1).strip() if sigma_rule else ''
-
     return powerquery, sigma_rule
 
-# Function to extract attributes from the SIGMA rule
 def parse_sigma_rule(sigma_rule):
     try:
         sigma_data = yaml.safe_load(sigma_rule)
-        if sigma_data is None:
+        if not sigma_data:
             raise ValueError("Invalid or empty YAML content")
 
         description = sigma_data.get('description', '')
         title = sigma_data.get('title', '')
-        tags = sigma_data.get('tags', [])
-
+        tags = sigma_data.get('tags', []) or []
         mitre_techniques = [tag.split('.')[1] for tag in tags if tag.startswith('attack.t')]
 
         return description, title, mitre_techniques
-    except yaml.YAMLError as e:
+    except Exception as e:
         log_error(f"Error parsing the SIGMA rule: {e}")
         return '', '', []
-    except ValueError as e:
-        log_error(f"YAML content error: {e}")
-        return '', '', []
 
-# Function to create or update the query.json file
 def update_query_json(entries):
-    if os.path.exists(QUERY_JSON_PATH):
-        with open(QUERY_JSON_PATH, 'r') as json_file:
-            existing_entries = json.load(json_file)
-            entries.extend(existing_entries)
+    # This now overwrites the file from scratch every time.
+    # This prevents the file from growing > 100MB and fixes JSONDecodeErrors.
+    try:
+        with open(QUERY_JSON_PATH, 'w', encoding='utf-8') as json_file:
+            json.dump(entries, json_file, indent=4)
+        print(f"Successfully wrote {len(entries)} entries to {QUERY_JSON_PATH}")
+    except Exception as e:
+        log_error(f"Error writing to {QUERY_JSON_PATH}: {e}")
 
-    with open(QUERY_JSON_PATH, 'w') as json_file:
-        json.dump(entries, json_file, indent=4)
-
-# Function to log errors to a log file
 def log_error(message):
+    print(message) # Also print to console for GitHub Action logs
     with open(ERRORS_LOG_PATH, 'a') as log_file:
         log_file.write(message + '\n')
 
-# Main
 if __name__ == "__main__":
     if download_and_extract_repo(GITHUB_REPO_URL, ZIP_FILE_PATH, LOCAL_REPO_PATH):
-        md_files = get_md_files(os.path.join(LOCAL_REPO_PATH, 'ConvertSigmaRepo2SentinelOnePQ-main'))
-        pk = 1
+        # Path adjustment for the extracted folder name
+        extracted_folder = os.path.join(LOCAL_REPO_PATH, 'ConvertSigmaRepo2SentinelOnePQ-main')
+        md_files = get_md_files(extracted_folder)
+        
         query_entries = []
+        pk = 1
 
         for file_path in md_files:
             try:
                 with open(file_path, 'r', encoding='utf-8') as file:
                     content = file.read()
 
-                # Extract information
                 powerquery, sigma_rule = extract_info(content)
                 description, title, mitre_techniques = parse_sigma_rule(sigma_rule)
 
-                # Create the query entry
                 query_data = {
                     "fields": {
                         "actors": [],
@@ -141,5 +134,4 @@ if __name__ == "__main__":
             except Exception as e:
                 log_error(f"Error processing the file {file_path}: {e}")
 
-        # Update the query.json file
         update_query_json(query_entries)
