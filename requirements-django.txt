@@ -2,7 +2,7 @@
 # Install with: pip install -r requirements-django.txt
 
 # Core dependencies
-django>=4.2,<5.0
+django>=4.2,<7.0
 pyyaml>=6.0
 requests>=2.31.0
 
