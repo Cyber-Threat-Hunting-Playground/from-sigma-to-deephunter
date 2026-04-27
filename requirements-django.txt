@@ -7,4 +7,4 @@ pyyaml>=6.0
 requests>=2.31.0
 
 # Optional but recommended
-django-extensions>=3.2.0  # For runscript command
+django-extensions>=4.1  # For runscript command
