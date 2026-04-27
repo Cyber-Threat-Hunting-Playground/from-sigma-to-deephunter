@@ -3,7 +3,7 @@
 
 # Core dependencies
 django>=6.0.4,<7.0
-pyyaml>=6.0
+pyyaml>=6.0.3
 requests>=2.33.1
 
 # Optional but recommended
