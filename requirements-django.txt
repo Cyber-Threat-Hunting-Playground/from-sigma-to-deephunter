@@ -4,7 +4,7 @@
 # Core dependencies
 django>=6.0.4,<7.0
 pyyaml>=6.0.3
-requests>=2.33.1
+requests>=2.34.2
 
 # Optional but recommended
 django-extensions>=4.1  # For runscript command
